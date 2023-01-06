@@ -9,6 +9,17 @@ interface HotComponent<P> {
   dependencies?: any[];
 }
 
+interface HotData<P> {
+  Comp: HotComponent<P>;
+  Component: (props: P) => JSX.Element;
+}
+
+interface EsmHot<P> {
+  data: {
+    "solid-refresh-ctx": Record<string, HotData<P>>;
+  };
+}
+
 interface HotSignature<P> {
   component: HotComponent<P>;
   id: string;
@@ -22,7 +33,7 @@ interface HotModule<P> {
 
 export default function hot<P>(
   { component: Comp, id, signature, dependencies }: HotSignature<P>,
-  isHot: boolean
+  hot?: EsmHot<P>
 ) {
   let Component: (props: P) => JSX.Element = Comp;
   function handler(newModule: HotModule<P>) {
@@ -56,12 +67,19 @@ export default function hot<P>(
     registration.component.dependencies = Comp.dependencies;
     return false;
   }
-  if (isHot) {
+  if (hot) {
+    const dataPrefix = "solid-refresh-ctx";
+    const refreshData = (hot.data[dataPrefix] = hot.data[dataPrefix] || {});
+    if (refreshData[id]) {
+      Comp.setComp = refreshData[id].Comp.setComp;
+      return { Component: refreshData[id].Component, handler };
+    }
     const [comp, setComp] = createSignal(Comp, { internal: true });
     Comp.setComp = setComp;
     Comp.dependencies = dependencies;
     Comp.signature = signature;
     Component = createProxy(comp);
+    refreshData[id] = { Component, Comp };
   }
   return { Component, handler };
 }
